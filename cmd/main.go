@@ -1,35 +1,33 @@
 package main
 
 import (
+	"cloud.google.com/go/storage"
 	"context"
+	"encoding/json"
 	"fmt"
 	"github.com/dstotijn/go-notion"
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/joho/godotenv"
 	"log"
+	"net/http"
 	"os"
 	"piryth.fr/blog/api"
 	"piryth.fr/blog/database"
 )
 
 func main() {
-
-	//pageBlocksToMarkdown()
-	// Load environment variables from .env file
 	err := godotenv.Load()
 	if err != nil {
 		log.Fatalf("Error loading .env file: %v", err)
 	}
 
-	// Get database connection details from environment variables
 	dbUser := os.Getenv("DB_USER")
 	dbPassword := os.Getenv("DB_PASSWORD")
 	dbName := os.Getenv("DB_NAME")
 	dbHost := os.Getenv("DB_HOST")
 	dbPort := os.Getenv("DB_PORT")
 
-	// Initialize the database connection
 	connStr := fmt.Sprintf("user=%s dbname=%s sslmode=disable password=%s host=%s port=%s",
 		dbUser, dbName, dbPassword, dbHost, dbPort)
 	pool, err := pgxpool.New(context.Background(), connStr)
@@ -38,25 +36,42 @@ func main() {
 	}
 	defer pool.Close()
 
-	// Create a new Queries instance
 	queries := database.New(pool)
 
-	// Initialize the Gin router
 	r := gin.Default()
+	r.Use(CorsMiddleware())
 
-	// Set up the routes
-	api.SetupRoutes(r, queries)
+	gcsClient, err := storage.NewClient(context.Background())
+	if err != nil {
+		log.Fatalf("Failed to create GCS client: %v", err)
+	}
+	defer gcsClient.Close()
 
-	// Start the server
+	api.SetupRoutes(r, queries, gcsClient)
+
 	err = r.Run(":8080")
 	if err != nil {
-		return
+		log.Fatalf("Failed to start server: %v", err)
+	}
+}
+
+func CorsMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		c.Writer.Header().Set("Access-Control-Allow-Origin", "http://localhost:3000")
+		c.Writer.Header().Set("Access-Control-Allow-Credentials", "true")
+		c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Content-Length, Accept-Encoding, Authorization")
+		c.Writer.Header().Set("Access-Control-Allow-Methods", "OPTIONS, GET, POST, PATCH, DELETE, PUT")
+
+		if c.Request.Method == "OPTIONS" {
+			c.AbortWithStatus(http.StatusNoContent)
+			return
+		}
+
+		c.Next()
 	}
 }
 
 func pageBlocksToMarkdown() {
-
-	// Load environment variables from .env file
 	err := godotenv.Load()
 	if err != nil {
 		log.Fatalf("Error loading .env file: %v", err)
@@ -71,22 +86,13 @@ func pageBlocksToMarkdown() {
 
 	blocks, err := client.FindBlockChildrenByID(context.Background(), "21682ad536ce805bb798e59dd58af036", &pagination)
 	if err != nil {
-		log.Fatalf("Impossible to query Notion", err)
+		log.Fatalf("Impossible to query Notion: %v", err)
 	}
 
-	for index, block := range blocks.Results {
-		log.Println(block.MarshalJSON())
-		log.Println(index)
+	marshalled, err := json.MarshalIndent(blocks.Results[0], "", " ")
+	if err != nil {
+		log.Fatalf("marshaling error: %s", err)
 	}
 
-	// INPUT : page id
-
-	// QUERY : get block children
-
-	// TREATMENT : iterate over each block
-
-	// FOR EACH : convert the bloc into markdown append it
-
-	// OUTPUT : markdown formatted text
-
+	fmt.Print(string(marshalled))
 }

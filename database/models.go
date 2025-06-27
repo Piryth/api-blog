@@ -9,14 +9,15 @@ import (
 )
 
 type Posts struct {
-	ID          int32            `json:"id"`
-	Title       string           `json:"title"`
-	Content     string           `json:"content"`
-	Slug        string           `json:"slug"`
-	Description string           `json:"description"`
-	UserID      int32            `json:"user_id"`
-	CreatedAt   pgtype.Timestamp `json:"created_at"`
-	UpdatedAt   pgtype.Timestamp `json:"updated_at"`
+	ID           int32            `json:"id"`
+	Title        string           `json:"title"`
+	Content      string           `json:"content"`
+	Slug         string           `json:"slug"`
+	Description  string           `json:"description"`
+	ThumbnailUrl string           `json:"thumbnail_url"`
+	UserID       int32            `json:"user_id"`
+	CreatedAt    pgtype.Timestamp `json:"created_at"`
+	UpdatedAt    pgtype.Timestamp `json:"updated_at"`
 }
 
 type Users struct {

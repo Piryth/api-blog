@@ -12,10 +12,11 @@ CREATE TABLE IF NOT EXISTS users
 CREATE TABLE IF NOT EXISTS posts
 (
     id          SERIAL PRIMARY KEY,
-    title       varchar NOT NULL,
+    title       varchar NOT NULL unique ,
     content     TEXT    NOT NULL,
-    slug        varchar not null,
+    slug        varchar not null unique ,
     description varchar not null,
+    thumbnail_url varchar not null default '',
     user_id INTEGER NOT NULL,
     created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP

@@ -3,6 +3,7 @@ package handlers
 import (
 	"github.com/gin-gonic/gin"
 	"github.com/gosimple/slug"
+	"log"
 	"net/http"
 	"piryth.fr/blog/database"
 	"strconv"
@@ -14,10 +15,11 @@ type PostHandler struct {
 
 func (h *PostHandler) CreatePost(c *gin.Context) {
 	var req struct {
-		Title       string `json:"title"`
-		Content     string `json:"content"`
-		Description string `json:"description"`
-		UserID      int32  `json:"user_id"`
+		Title        string `json:"title"`
+		Content      string `json:"content"`
+		Description  string `json:"description"`
+		UserID       int32  `json:"user_id"`
+		ThumbnailUrl string `json:"thumbnail_url"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -27,11 +29,12 @@ func (h *PostHandler) CreatePost(c *gin.Context) {
 	slugTitle := slug.Make(req.Title)
 
 	post, err := h.Queries.CreatePost(c, database.CreatePostParams{
-		Title:       req.Title,
-		Content:     req.Content,
-		UserID:      req.UserID,
-		Description: req.Description,
-		Slug:        slugTitle,
+		Title:        req.Title,
+		Content:      req.Content,
+		UserID:       req.UserID,
+		Description:  req.Description,
+		Slug:         slugTitle,
+		ThumbnailUrl: req.ThumbnailUrl,
 	})
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -42,13 +45,7 @@ func (h *PostHandler) CreatePost(c *gin.Context) {
 }
 
 func (h *PostHandler) GetPost(c *gin.Context) {
-	id, err := strconv.Atoi(c.Param("id"))
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid post ID"})
-		return
-	}
-
-	post, err := h.Queries.GetPost(c, int32(id))
+	post, err := h.Queries.GetPost(c, c.Param("slug"))
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -78,28 +75,31 @@ func (h *PostHandler) ListPosts(c *gin.Context) {
 }
 
 func (h *PostHandler) UpdatePost(c *gin.Context) {
-	id, err := strconv.Atoi(c.Param("id"))
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid post ID"})
-		return
-	}
+	baseSlug := c.Param("slug")
+	log.Print(baseSlug + " is the slug")
 
 	var req struct {
-		Title   string `json:"title"`
-		Content string `json:"content"`
+		Title        string `json:"title"`
+		Content      string `json:"content"`
+		ThumbnailUrl string `json:"thumbnail_url"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
+	slugTitle := slug.Make(req.Title)
+
 	post, err := h.Queries.UpdatePost(c, database.UpdatePostParams{
-		ID:      int32(id),
-		Title:   req.Title,
-		Content: req.Content,
+		Title:        req.Title,
+		Content:      req.Content,
+		Slug:         slugTitle,
+		Slug_2:       baseSlug,
+		ThumbnailUrl: req.ThumbnailUrl,
 	})
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		log.Print(err.Error())
 		return
 	}
 

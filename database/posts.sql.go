@@ -12,26 +12,28 @@ import (
 )
 
 const createPost = `-- name: CreatePost :one
-INSERT INTO posts (title, description, content, slug, user_id)
-VALUES ($1, $2, $3, $4, $5)
-RETURNING id, title, content, user_id, created_at, updated_at
+INSERT INTO posts (title, description, content, slug, thumbnail_url, user_id)
+VALUES ($1, $2, $3, $4, $5, $6)
+RETURNING id, title, content, thumbnail_url, user_id, created_at, updated_at
 `
 
 type CreatePostParams struct {
-	Title       string `json:"title"`
-	Description string `json:"description"`
-	Content     string `json:"content"`
-	Slug        string `json:"slug"`
-	UserID      int32  `json:"user_id"`
+	Title        string `json:"title"`
+	Description  string `json:"description"`
+	Content      string `json:"content"`
+	Slug         string `json:"slug"`
+	ThumbnailUrl string `json:"thumbnail_url"`
+	UserID       int32  `json:"user_id"`
 }
 
 type CreatePostRow struct {
-	ID        int32            `json:"id"`
-	Title     string           `json:"title"`
-	Content   string           `json:"content"`
-	UserID    int32            `json:"user_id"`
-	CreatedAt pgtype.Timestamp `json:"created_at"`
-	UpdatedAt pgtype.Timestamp `json:"updated_at"`
+	ID           int32            `json:"id"`
+	Title        string           `json:"title"`
+	Content      string           `json:"content"`
+	ThumbnailUrl string           `json:"thumbnail_url"`
+	UserID       int32            `json:"user_id"`
+	CreatedAt    pgtype.Timestamp `json:"created_at"`
+	UpdatedAt    pgtype.Timestamp `json:"updated_at"`
 }
 
 func (q *Queries) CreatePost(ctx context.Context, arg CreatePostParams) (CreatePostRow, error) {
@@ -40,6 +42,7 @@ func (q *Queries) CreatePost(ctx context.Context, arg CreatePostParams) (CreateP
 		arg.Description,
 		arg.Content,
 		arg.Slug,
+		arg.ThumbnailUrl,
 		arg.UserID,
 	)
 	var i CreatePostRow
@@ -47,6 +50,7 @@ func (q *Queries) CreatePost(ctx context.Context, arg CreatePostParams) (CreateP
 		&i.ID,
 		&i.Title,
 		&i.Content,
+		&i.ThumbnailUrl,
 		&i.UserID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
@@ -65,25 +69,28 @@ func (q *Queries) DeletePost(ctx context.Context, id int32) error {
 }
 
 const getPost = `-- name: GetPost :one
-SELECT id, title, description, content, slug, user_id, created_at, updated_at
-FROM posts
-WHERE id = $1
+SELECT p.id, p.title, p.description, p.content, p.slug, p.thumbnail_url, p.user_id, p.created_at, p.updated_at, u.name AS author_name
+FROM posts p
+         JOIN users u ON p.user_id = u.id
+WHERE p.slug = $1
 LIMIT 1
 `
 
 type GetPostRow struct {
-	ID          int32            `json:"id"`
-	Title       string           `json:"title"`
-	Description string           `json:"description"`
-	Content     string           `json:"content"`
-	Slug        string           `json:"slug"`
-	UserID      int32            `json:"user_id"`
-	CreatedAt   pgtype.Timestamp `json:"created_at"`
-	UpdatedAt   pgtype.Timestamp `json:"updated_at"`
+	ID           int32            `json:"id"`
+	Title        string           `json:"title"`
+	Description  string           `json:"description"`
+	Content      string           `json:"content"`
+	Slug         string           `json:"slug"`
+	ThumbnailUrl *string           `json:"thumbnail_url"`
+	UserID       int32            `json:"user_id"`
+	CreatedAt    pgtype.Timestamp `json:"created_at"`
+	UpdatedAt    pgtype.Timestamp `json:"updated_at"`
+	AuthorName   string           `json:"author_name"`
 }
 
-func (q *Queries) GetPost(ctx context.Context, id int32) (GetPostRow, error) {
-	row := q.db.QueryRow(ctx, getPost, id)
+func (q *Queries) GetPost(ctx context.Context, slug string) (GetPostRow, error) {
+	row := q.db.QueryRow(ctx, getPost, slug)
 	var i GetPostRow
 	err := row.Scan(
 		&i.ID,
@@ -91,17 +98,20 @@ func (q *Queries) GetPost(ctx context.Context, id int32) (GetPostRow, error) {
 		&i.Description,
 		&i.Content,
 		&i.Slug,
+		&i.ThumbnailUrl,
 		&i.UserID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.AuthorName,
 	)
 	return i, err
 }
 
 const listPosts = `-- name: ListPosts :many
-SELECT id, title,description, content, slug, user_id, created_at, updated_at
-FROM posts
-ORDER BY created_at DESC
+SELECT p.id, p.title, p.description, p.slug, p.thumbnail_url, p.user_id, p.created_at, p.updated_at, u.name AS author_name
+FROM posts p
+         JOIN users u ON p.user_id = u.id
+ORDER BY p.created_at DESC
 LIMIT $1 OFFSET $2
 `
 
@@ -111,14 +121,15 @@ type ListPostsParams struct {
 }
 
 type ListPostsRow struct {
-	ID          int32            `json:"id"`
-	Title       string           `json:"title"`
-	Description string           `json:"description"`
-	Content     string           `json:"content"`
-	Slug        string           `json:"slug"`
-	UserID      int32            `json:"user_id"`
-	CreatedAt   pgtype.Timestamp `json:"created_at"`
-	UpdatedAt   pgtype.Timestamp `json:"updated_at"`
+	ID           int32            `json:"id"`
+	Title        string           `json:"title"`
+	Description  string           `json:"description"`
+	Slug         string           `json:"slug"`
+	ThumbnailUrl *string           `json:"thumbnail_url"`
+	UserID       int32            `json:"user_id"`
+	CreatedAt    pgtype.Timestamp `json:"created_at"`
+	UpdatedAt    pgtype.Timestamp `json:"updated_at"`
+	AuthorName   string           `json:"author_name"`
 }
 
 func (q *Queries) ListPosts(ctx context.Context, arg ListPostsParams) ([]ListPostsRow, error) {
@@ -134,11 +145,12 @@ func (q *Queries) ListPosts(ctx context.Context, arg ListPostsParams) ([]ListPos
 			&i.ID,
 			&i.Title,
 			&i.Description,
-			&i.Content,
 			&i.Slug,
+			&i.ThumbnailUrl,
 			&i.UserID,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.AuthorName,
 		); err != nil {
 			return nil, err
 		}
@@ -152,30 +164,39 @@ func (q *Queries) ListPosts(ctx context.Context, arg ListPostsParams) ([]ListPos
 
 const updatePost = `-- name: UpdatePost :one
 UPDATE posts
-SET title = $1, content = $2, updated_at = CURRENT_TIMESTAMP
-WHERE id = $3
-RETURNING id, title,description, content, slug, user_id, created_at, updated_at
+SET title = $1, content = $2, slug = $3, thumbnail_url = $4, updated_at = CURRENT_TIMESTAMP
+WHERE slug = $5
+RETURNING id, title, description, content, slug, thumbnail_url, user_id, created_at, updated_at
 `
 
 type UpdatePostParams struct {
-	Title   string `json:"title"`
-	Content string `json:"content"`
-	ID      int32  `json:"id"`
+	Title        string `json:"title"`
+	Content      string `json:"content"`
+	Slug         string `json:"slug"`
+	ThumbnailUrl string `json:"thumbnail_url"`
+	Slug_2       string `json:"slug_2"`
 }
 
 type UpdatePostRow struct {
-	ID          int32            `json:"id"`
-	Title       string           `json:"title"`
-	Description string           `json:"description"`
-	Content     string           `json:"content"`
-	Slug        string           `json:"slug"`
-	UserID      int32            `json:"user_id"`
-	CreatedAt   pgtype.Timestamp `json:"created_at"`
-	UpdatedAt   pgtype.Timestamp `json:"updated_at"`
+	ID           int32            `json:"id"`
+	Title        string           `json:"title"`
+	Description  string           `json:"description"`
+	Content      string           `json:"content"`
+	Slug         string           `json:"slug"`
+	ThumbnailUrl *string           `json:"thumbnail_url"`
+	UserID       int32            `json:"user_id"`
+	CreatedAt    pgtype.Timestamp `json:"created_at"`
+	UpdatedAt    pgtype.Timestamp `json:"updated_at"`
 }
 
 func (q *Queries) UpdatePost(ctx context.Context, arg UpdatePostParams) (UpdatePostRow, error) {
-	row := q.db.QueryRow(ctx, updatePost, arg.Title, arg.Content, arg.ID)
+	row := q.db.QueryRow(ctx, updatePost,
+		arg.Title,
+		arg.Content,
+		arg.Slug,
+		arg.ThumbnailUrl,
+		arg.Slug_2,
+	)
 	var i UpdatePostRow
 	err := row.Scan(
 		&i.ID,
@@ -183,6 +204,7 @@ func (q *Queries) UpdatePost(ctx context.Context, arg UpdatePostParams) (UpdateP
 		&i.Description,
 		&i.Content,
 		&i.Slug,
+		&i.ThumbnailUrl,
 		&i.UserID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
